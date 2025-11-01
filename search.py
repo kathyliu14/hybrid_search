@@ -57,8 +57,20 @@ class Search:
             raise ValueError(f"Invalid method: {method}")
 
     def pre_search(self, embedding_query: np.ndarray, predicates: List[Predicate], k: int) -> HSearchResults:
-        # we need to implement coarse pre-search here
-        return self.adaptive_pre_search(embedding_query, predicates, k)
+        filtered_records = self.db.predicates_search(predicates)
+        
+        if len(filtered_records) == 0:
+            return HSearchResults(results=[], is_k=False)
+        
+        item_ids = [record.item_id for record in filtered_records.records]
+        
+        ann_results = self.index.search(embedding_query, max(k, len(filtered_records)), nprobe=NLIST, item_ids=item_ids)
+        
+        results_with_similarity = self._intersect(ann_results, filtered_records)
+        
+        if len(results_with_similarity) >= k:
+            return HSearchResults(results=results_with_similarity[:k], is_k=True)
+        return HSearchResults(results=results_with_similarity, is_k=False)
     
     def pos_search(self, embedding_query: np.ndarray, predicates: List[Predicate], k: int, est_survivors: int) -> HSearchResults:
         # we need to implement coarse post-search here
@@ -164,4 +176,5 @@ class Search:
         return [HSearchResult(record=db_records_dict[item_id], similarity=similarity)
                 for item_id, similarity in ann_results_dict.items()
                 if item_id in db_item_ids]
+    
 
